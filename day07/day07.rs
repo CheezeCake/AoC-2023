@@ -75,6 +75,20 @@ impl Hand {
                 .or_insert(1);
         }
 
+        if card_counter.contains_key(&Card::Joker) {
+            let joker_count = *card_counter.get(&Card::Joker).unwrap();
+            card_counter.remove(&Card::Joker);
+            let max_count_card = *card_counter
+                .iter()
+                .max_by_key(|(_, count)| *count)
+                .map(|(card, _)| card)
+                .unwrap_or(&Card::Joker);
+            card_counter
+                .entry(max_count_card)
+                .and_modify(|count| *count += joker_count)
+                .or_insert(joker_count);
+        }
+
         let mut counts: Vec<usize> = card_counter.iter().map(|(_, &count)| count).collect();
         counts.sort();
 
@@ -86,51 +100,8 @@ impl Hand {
             [1, 2, 2] => HandType::TwoPair,
             [1, 1, 1, 2] => HandType::OnePair,
             [1, 1, 1, 1, 1] => HandType::HighCard,
-            _ => {
-                unreachable!()
-            }
+            _ => unreachable!(),
         }
-    }
-
-    fn strongest_hand_type(&self) -> HandType {
-        let mut cloned: [Card; 5] = [Card::Ace; 5];
-        cloned.clone_from_slice(&self.cards);
-
-        Hand::find_strongest_hand_type(0, &mut cloned)
-    }
-
-    fn find_strongest_hand_type(pos: usize, cards: &mut [Card; 5]) -> HandType {
-        if pos == cards.len() {
-            return Hand { cards: *cards }.hand_type();
-        }
-
-        let mut strongest = Hand::find_strongest_hand_type(pos + 1, cards);
-
-        if cards[pos] == Card::Joker {
-            let replacements = [
-                Card::Two,
-                Card::Three,
-                Card::Four,
-                Card::Five,
-                Card::Six,
-                Card::Seven,
-                Card::Eight,
-                Card::Nine,
-                Card::Ten,
-                Card::Jack,
-                Card::Queen,
-                Card::King,
-                Card::Ace,
-            ];
-
-            for replacement in replacements {
-                cards[pos] = replacement;
-                strongest = strongest.max(Hand::find_strongest_hand_type(pos + 1, cards));
-                cards[pos] = Card::Joker;
-            }
-        }
-
-        strongest
     }
 }
 
@@ -158,7 +129,7 @@ impl FromStr for Hand {
 
 impl Ord for Hand {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.strongest_hand_type().cmp(&other.strongest_hand_type()) {
+        match self.hand_type().cmp(&other.hand_type()) {
             Ordering::Equal => self.cards.cmp(&other.cards),
             ord => ord,
         }
