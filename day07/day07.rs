@@ -175,10 +175,10 @@ fn main() {
 
     println!("part 1: {}", total_winnings(&mut data));
 
-    for i in 0..data.len() {
-        for j in 0..5 {
-            if data[i].0.cards[j] == Card::Jack {
-                data[i].0.cards[j] = Card::Joker;
+    for (hand, _) in &mut data {
+        for card in &mut hand.cards {
+            if card == &Card::Jack {
+                *card = Card::Joker;
             }
         }
     }
