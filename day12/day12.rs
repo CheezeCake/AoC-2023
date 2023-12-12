@@ -1,22 +1,40 @@
 use std::collections::HashMap;
 use std::io;
 
+trait Predicate {
+    fn ok(&self, c: char) -> bool;
+}
+
 enum Pattern {
-    ZeroOrN(Box<dyn Fn(char) -> bool>),
-    OneOrN(Box<dyn Fn(char) -> bool>),
-    N(Box<dyn Fn(char) -> bool>, usize),
+    ZeroOrN(Box<dyn Predicate>),
+    OneOrN(Box<dyn Predicate>),
+    N(Box<dyn Predicate>, usize),
+}
+
+struct Operational;
+impl Predicate for Operational {
+    fn ok(&self, c: char) -> bool {
+        c == '.' || c == '?'
+    }
+}
+
+struct Damaged;
+impl Predicate for Damaged {
+    fn ok(&self, c: char) -> bool {
+        c == '#' || c == '?'
+    }
 }
 
 fn create_pattern(damaged_groups: &[usize]) -> Vec<Pattern> {
-    let mut res = vec![Pattern::ZeroOrN(Box::new(|c| c == '.' || c == '?'))];
+    let mut res = vec![Pattern::ZeroOrN(Box::new(Operational))];
 
     for &group_size in damaged_groups {
-        res.push(Pattern::N(Box::new(|c| c == '#' || c == '?'), group_size));
-        res.push(Pattern::OneOrN(Box::new(|c| c == '.' || c == '?')));
+        res.push(Pattern::N(Box::new(Damaged), group_size));
+        res.push(Pattern::OneOrN(Box::new(Operational)));
     }
     res.pop();
 
-    res.push(Pattern::ZeroOrN(Box::new(|c| c == '.' || c == '?')));
+    res.push(Pattern::ZeroOrN(Box::new(Operational)));
 
     res
 }
@@ -45,14 +63,14 @@ fn match_count(
     let count = match &pattern[ppos] {
         Pattern::ZeroOrN(pred) => {
             match_count(rpos, record, ppos + 1, pattern, mem)
-                + if rpos < record.len() && pred(record[rpos]) {
+                + if rpos < record.len() && pred.ok(record[rpos]) {
                     match_count(rpos + 1, record, ppos, pattern, mem)
                 } else {
                     0
                 }
         }
         Pattern::OneOrN(pred) => {
-            if rpos < record.len() && pred(record[rpos]) {
+            if rpos < record.len() && pred.ok(record[rpos]) {
                 match_count(rpos + 1, record, ppos + 1, pattern, mem)
                     + match_count(rpos + 1, record, ppos, pattern, mem)
             } else {
@@ -60,14 +78,13 @@ fn match_count(
             }
         }
         Pattern::N(pred, n) => {
-            if rpos + n <= record.len() && record[rpos..rpos + n].iter().all(|&c| pred(c)) {
+            if rpos + n <= record.len() && record[rpos..rpos + n].iter().all(|&c| pred.ok(c)) {
                 match_count(rpos + n, record, ppos + 1, pattern, mem)
             } else {
                 0
             }
         }
     };
-
     mem.insert(k, count);
 
     count
