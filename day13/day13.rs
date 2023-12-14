@@ -1,20 +1,6 @@
 use std::io;
 use std::iter;
 
-fn popcount(n: u32) -> usize {
-    let mut n = n;
-    let mut count = 0;
-
-    while n != 0 {
-        if n & 1 == 1 {
-            count += 1;
-        }
-        n >>= 1;
-    }
-
-    count
-}
-
 fn reflection_line(lines: &[u32], smudges: usize) -> Option<usize> {
     for i in 0..lines.len() - 1 {
         let mut j = i as isize;
@@ -25,7 +11,7 @@ fn reflection_line(lines: &[u32], smudges: usize) -> Option<usize> {
         while j >= 0 && k < lines.len() {
             let x = lines[j as usize] ^ lines[k];
             if x != 0 {
-                if popcount(x) == 1 && n < smudges {
+                if x.count_ones() == 1 && n < smudges {
                     n += 1;
                 } else {
                     break;
