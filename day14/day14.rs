@@ -10,50 +10,45 @@ enum Shape {
 
 #[derive(Eq, Hash, PartialEq, Clone)]
 struct Platform {
-    map: Vec<Shape>,
-    n: usize,
+    map: Vec<Vec<Shape>>,
 }
 
 impl Platform {
-    fn get(&self, x: usize, y: usize) -> Shape {
-        self.map[y * self.n + x]
-    }
-
-    fn set(&mut self, x: usize, y: usize, s: Shape) {
-        self.map[y * self.n + x] = s;
-    }
-
     fn support_beams_load(&self) -> usize {
         self.map
             .iter()
             .enumerate()
-            .filter(|(_, &s)| s == Shape::RoundedRock)
-            .map(|(pos, _)| self.n - (pos / self.n))
+            .map(|(y, row)| {
+                row.iter().filter(|&s| *s == Shape::RoundedRock).count() * (self.map.len() - y)
+            })
             .sum()
     }
 
     fn rotate(&mut self) {
-        for y in 0..self.n / 2 {
-            for x in y..self.n - y - 1 {
-                let tmp = self.get(x, y);
-                self.set(x, y, self.get(y, self.n - x - 1));
-                self.set(y, self.n - x - 1, self.get(self.n - x - 1, self.n - y - 1));
-                self.set(self.n - x - 1, self.n - y - 1, self.get(self.n - y - 1, x));
-                self.set(self.n - y - 1, x, tmp);
+        let n = self.map.len();
+
+        for y in 0..n / 2 {
+            for x in y..n - y - 1 {
+                let tmp = self.map[y][x];
+                self.map[y][x] = self.map[n - x - 1][y];
+                self.map[n - x - 1][y] = self.map[n - y - 1][n - x - 1];
+                self.map[n - y - 1][n - x - 1] = self.map[x][n - y - 1];
+                self.map[x][n - y - 1] = tmp;
             }
         }
     }
 
     fn tilt(&mut self) {
+        let n = self.map.len();
         // north
-        for x in 0..self.n {
+        for x in 0..n {
             let mut edge = 0;
-            for y in 0..self.n {
-                match self.get(x, y) {
+            for y in 0..n {
+                match self.map[y][x] {
                     Shape::Cube => edge = y + 1,
                     Shape::RoundedRock => {
-                        self.set(x, y, Shape::Empty);
-                        self.set(x, edge, Shape::RoundedRock);
+                        self.map[y][x] = Shape::Empty;
+                        self.map[edge][x] = Shape::RoundedRock;
                         edge += 1;
                     }
                     Shape::Empty => {}
@@ -71,24 +66,22 @@ impl Platform {
 }
 
 fn main() {
-    let platform: Vec<Vec<char>> = io::stdin()
+    let input: Vec<Vec<Shape>> = io::stdin()
         .lines()
-        .map(|line| line.unwrap().chars().collect())
+        .map(|line| {
+            line.unwrap()
+                .chars()
+                .map(|c| match c {
+                    '#' => Shape::Cube,
+                    'O' => Shape::RoundedRock,
+                    '.' => Shape::Empty,
+                    _ => panic!("invalid character: {}", c),
+                })
+                .collect()
+        })
         .collect();
 
-    let mut p = Platform {
-        map: platform
-            .iter()
-            .flatten()
-            .map(|c| match c {
-                '#' => Shape::Cube,
-                'O' => Shape::RoundedRock,
-                '.' => Shape::Empty,
-                _ => panic!("invalid character: {}", c),
-            })
-            .collect(),
-        n: platform.len(),
-    };
+    let mut p = Platform { map: input };
 
     {
         let mut p = p.clone();
