@@ -16,6 +16,88 @@ struct Module {
     destinations: Vec<String>,
 }
 
+fn gcd(a: usize, b: usize) -> usize {
+    let mut a = a;
+    let mut b = b;
+
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+
+    a
+}
+
+fn find_cycles(
+    rx_input_inputs: &[String],
+    modules: &mut HashMap<String, Module>,
+) -> Vec<Option<usize>> {
+    let mut cycles: Vec<_> = rx_input_inputs.iter().map(|_| None).collect();
+    let mut n = 1;
+
+    while cycles.iter().any(|cycle| cycle.is_none()) {
+        let mut q = VecDeque::new();
+        q.push_back(("button".to_string(), "broadcaster".to_string(), false));
+
+        while let Some((sender, recipient, pulse)) = q.pop_front() {
+            if let Some(next_pulse) = transmit_pulse(&sender, &recipient, pulse, modules) {
+                for destination in &modules.get(&recipient).unwrap().destinations {
+                    q.push_back((recipient.clone(), destination.clone(), next_pulse));
+                }
+            }
+            if n > 1 {
+                for i in 0..rx_input_inputs.len() {
+                    if cycles[i].is_none() {
+                        let module = modules.get(&rx_input_inputs[i]).unwrap();
+                        match &module.modtype {
+                            ModuleType::Conjunction(inputs) => {
+                                if !inputs.values().all(|&saved| saved) {
+                                    cycles[i] = Some(n);
+                                }
+                            }
+                            _ => panic!(),
+                        }
+                    }
+                }
+            }
+        }
+
+        n += 1;
+    }
+
+    cycles
+}
+
+fn transmit_pulse(
+    sender: &String,
+    recipient: &String,
+    pulse: bool,
+    modules: &mut HashMap<String, Module>,
+) -> Option<bool> {
+    if let Some(module) = modules.get_mut(recipient) {
+        let next_pulse: Option<bool> = match module.modtype {
+            ModuleType::FlipFlop(ref mut on) => {
+                if pulse {
+                    None
+                } else {
+                    *on = !*on;
+                    Some(*on)
+                }
+            }
+            ModuleType::Conjunction(ref mut inputs) => {
+                inputs.insert(sender.clone(), pulse);
+                Some(!inputs.values().all(|&saved| saved))
+            }
+            ModuleType::Broadcast => Some(pulse),
+        };
+
+        next_pulse
+    } else {
+        None
+    }
+}
+
 fn push_button(modules: &mut HashMap<String, Module>) -> (usize, usize) {
     let mut high_pulse_count = 0;
     let mut low_pulse_count = 0;
@@ -24,53 +106,34 @@ fn push_button(modules: &mut HashMap<String, Module>) -> (usize, usize) {
     q.push_back(("button".to_string(), "broadcaster".to_string(), false));
 
     while let Some((sender, recipient, pulse)) = q.pop_front() {
-        // println!(
-        //     "{} -{}-> {}",
-        //     sender,
-        //     if pulse { "high" } else { "low" },
-        //     recipient
-        // );
-
         if pulse {
             high_pulse_count += 1;
         } else {
             low_pulse_count += 1;
         }
 
-        if let Some(module) = modules.get_mut(&recipient) {
-            let next_pulse: Option<bool> = match module.modtype {
-                ModuleType::FlipFlop(ref mut on) => {
-                    if pulse {
-                        None
-                    } else {
-                        *on = !*on;
-                        Some(*on)
-                    }
-                }
-                ModuleType::Conjunction(ref mut inputs) => {
-                    inputs.insert(sender, pulse);
-                    Some(!inputs.values().all(|&saved| saved))
-                }
-                ModuleType::Broadcast => Some(pulse),
-            };
-
-            if let Some(next_pulse) = next_pulse {
-                for destination in &module.destinations {
-                    q.push_back((recipient.clone(), destination.clone(), next_pulse));
-                }
+        if let Some(next_pulse) = transmit_pulse(&sender, &recipient, pulse, modules) {
+            for destination in &modules.get(&recipient).unwrap().destinations {
+                q.push_back((recipient.clone(), destination.clone(), next_pulse));
             }
-        } else if !pulse {
-            println!(
-                "{} -{}-> {}",
-                sender,
-                if pulse { "high" } else { "low" },
-                recipient
-            );
-            panic!();
         }
     }
 
     (high_pulse_count, low_pulse_count)
+}
+
+fn reset_modules(modules: &mut HashMap<String, Module>) {
+    for module in modules.values_mut() {
+        match module.modtype {
+            ModuleType::FlipFlop(ref mut on) => *on = false,
+            ModuleType::Conjunction(ref mut inputs) => {
+                for (_, saved) in inputs {
+                    *saved = false;
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn main() {
@@ -147,4 +210,25 @@ fn main() {
     }
 
     println!("part 1: {}", high_count * low_count);
+
+    reset_modules(&mut modules);
+
+    let rx_input_inputs: Vec<String> = modules
+        .iter()
+        .filter(|(_, module)| module.destinations.contains(&"rx".to_string()))
+        .map(|(_, module)| match &module.modtype {
+            ModuleType::Conjunction(inputs) => inputs.keys().map(|k| k.clone()),
+            _ => panic!(),
+        })
+        .flatten()
+        .collect();
+    let cycles = find_cycles(&rx_input_inputs, &mut modules);
+    println!(
+        "part 2: {}",
+        cycles
+            .iter()
+            .map(|x| x.unwrap())
+            .reduce(|acc, x| (acc * x) / gcd(acc, x))
+            .unwrap()
+    );
 }
